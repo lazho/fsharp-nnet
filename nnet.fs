@@ -264,28 +264,58 @@ let rec uintToBitList (n: int) (nb: int): bool list =
  *   gp:  The current gene pool
  *   min: Minimum fitness score
  *)
-let rec iterateUntilScoreReached gc fit rc rm gp min =
-  match gp with
-  | (g, s)::gs ->
-    if (s < min) then
-      (printfn "Generation #%i, highscore %i" gc s)
-      (iterateUntilScoreReached (gc + 1) fit rc rm (iterateGenePool fit rc rm gp) min)
+let iterateUntilScoreReached fit rc rm gp min =
+  let rec loop gc fit rc rm gp min =
+    let (_, score)::_ = gp
+    printfn "Generation #%i, score %i" gc score
+    if (score >= min) then
+      gp
     else
-      (genomeToNet g)
-  | [] -> failwith "There is nothing in this gene pool."
+      loop (gc + 1) fit rc rm (iterateGenePool fit rc rm gp) min
+  loop 0 fit rc rm gp min
 
 (* Fitness eval function to check if a network can tell if a 3 by 5 array of pixels
  * is the number "4". The network has to take 15 inputs and have 1 output.
  * Params:
  *   net: The network being evaluated.
  *)
-let testRecognise4 (net: NeuronNetwork): int =
+let testRecogniseSmall4 (net: NeuronNetwork): int =
   let mutable score = (pown 2 (3 * 5))
   for i in 0..((pown 2 (3 * 5)) - 1) do
     match (evalNetwork (uintToBitList i 15) net) with
       | [true] ->
         if (i <> 23497) then score <- score - 1
       | [false] ->
-        if (i = 23497) then score <- score - 1
+        if (i = 23497) then score <- score - (pown 2 (3 * 5))
       | _ -> failwith "Too many net outputs"
   score
+
+(* Fitness eval function to check if a network can tell if a 7 by 7 array of pixels
+ * is the number "4". The network has to take 49 inputs and have 1 output.
+ * Params:
+ *   net: The network being evaluated.
+ *)
+let testRecogniseBig4 (net: NeuronNetwork): int =
+  failwith "Not implemented yet."
+
+let writeNeuron (sw: System.IO.StreamWriter) (n: Neuron) =
+  List.map (fun x -> sw.WriteLine((string x))) n
+
+let writeLayer sw l =
+  List.map (fun x -> writeNeuron sw x; sw.WriteLine("")) l
+
+let writeNetwork (sw: System.IO.StreamWriter) net =
+  let (ml, ol) = net
+  sw.WriteLine("Hidden Layer:")
+  writeLayer sw ml
+  sw.WriteLine("Output Layer:")
+  writeLayer sw ol
+
+[<EntryPoint>]
+let main args =
+  let pool = makeGenePool [for i in 1..8 do yield (netToGenome (makeNetwork 15 1 20))] testRecogniseSmall4
+  let (fittest, _)::_ = (iterateUntilScoreReached testRecogniseSmall4 0.6 0.1 pool 32768)
+  let net = (genomeToNet fittest)
+  let sw = new System.IO.StreamWriter("output.txt")
+  writeNetwork sw net |> ignore
+  0
